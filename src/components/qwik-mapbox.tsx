@@ -10,46 +10,53 @@ import mapboxgl from "mapbox-gl";
 interface QwikMapboxProps {
   token: string;
   mapStyle: string | StyleSpecification;
+  center?: [number, number];
 }
 
 interface SerializationState {
   token: string;
   mapStyle?: string | StyleSpecification;
+  center?: [number, number];
 }
 
-export const QwikMapbox = component$<QwikMapboxProps>(({ token, mapStyle }) => {
-  const ref = useSignal<HTMLDivElement>();
+export const QwikMapbox = component$<QwikMapboxProps>(
+  ({ token, mapStyle, center = [0, 0] }) => {
+    const ref = useSignal<HTMLDivElement>();
 
-  const mapbox = useSerializer$({
-    initial: {
-      token,
-      mapStyle,
-    },
-    serialize: (map: mapboxgl.Map): SerializationState => {
-      return {
+    const mapbox = useSerializer$({
+      initial: {
         token,
-        mapStyle: map.getStyle() || undefined,
-      };
-    },
-    deserialize: (
-      data: SerializationState | undefined,
-      current: mapboxgl.Map | undefined,
-    ): mapboxgl.Map => {
-      if (current) {
-        return current;
-      }
+        mapStyle,
+        center,
+      },
+      serialize: (map: mapboxgl.Map): SerializationState => {
+        return {
+          token,
+          mapStyle: map.getStyle() || undefined,
+          center: map.getCenter().toArray(),
+        };
+      },
+      deserialize: (
+        data: SerializationState | undefined,
+        current: mapboxgl.Map | undefined,
+      ): mapboxgl.Map => {
+        if (current) {
+          return current;
+        }
 
-      return new mapboxgl.Map({
-        container: "map",
-        style: data!.mapStyle,
-        accessToken: data!.token,
-      });
-    },
-  });
+        return new mapboxgl.Map({
+          container: "map",
+          style: data!.mapStyle,
+          accessToken: data!.token,
+          center: data!.center,
+        });
+      },
+    });
 
-  useTask$(() => {
-    mapbox.value.on("load", () => console.log("MAP LOADED"));
-  });
+    useTask$(() => {
+      mapbox.value.on("load", () => console.log("MAP LOADED"));
+    });
 
-  return <div ref={ref} style={{ width: "800px", height: "600px" }}></div>;
-});
+    return <div ref={ref} style={{ width: "800px", height: "600px" }}></div>;
+  },
+);
