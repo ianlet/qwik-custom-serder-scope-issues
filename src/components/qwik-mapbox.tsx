@@ -1,5 +1,6 @@
 import {
   component$,
+  isServer,
   useSerializer$,
   useSignal,
   useTask$,
@@ -9,7 +10,7 @@ import mapboxgl from "mapbox-gl";
 
 interface QwikMapboxProps {
   token: string;
-  mapStyle: string | StyleSpecification;
+  mapStyle: string;
   center?: [number, number];
 }
 
@@ -23,38 +24,47 @@ export const QwikMapbox = component$<QwikMapboxProps>(
   ({ token, mapStyle, center = [0, 0] }) => {
     const ref = useSignal<HTMLDivElement>();
 
-    const mapbox = useSerializer$({
+    const mapbox = useSerializer$<
+      mapboxgl.Map | undefined,
+      SerializationState | undefined
+    >(() => ({
       initial: {
         token,
         mapStyle,
         center,
       },
-      serialize: (map: mapboxgl.Map): SerializationState => {
+      serialize: (map: mapboxgl.Map | undefined) => {
+        if (!map) return;
+
         return {
           token,
           mapStyle: map.getStyle() || undefined,
           center: map.getCenter().toArray(),
         };
       },
-      deserialize: (
-        data: SerializationState | undefined,
-        current: mapboxgl.Map | undefined,
-      ): mapboxgl.Map => {
-        if (current) {
-          return current;
-        }
+      deserialize: (state: SerializationState | undefined) => {
+        if (isServer) return;
+
+        const s = state || { token, mapStyle, center };
 
         return new mapboxgl.Map({
-          container: "map",
-          style: data!.mapStyle,
-          accessToken: data!.token,
-          center: data!.center,
+          container: ref.value!,
+          style: s.mapStyle,
+          center: s.center,
         });
       },
-    });
+      update: (map: mapboxgl.Map | undefined) => {
+        if (!map) return;
 
-    useTask$(() => {
-      mapbox.value.on("load", () => console.log("MAP LOADED"));
+        map.setStyle(mapStyle);
+        map.setCenter(center);
+      },
+    }));
+
+    useTask$(({ track }) => {
+      const map = track(mapbox);
+
+      map?.on("load", () => console.log("MAP LOADED"));
     });
 
     return <div ref={ref} style={{ width: "800px", height: "600px" }}></div>;
